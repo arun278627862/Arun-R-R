@@ -1,0 +1,423 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="light"> <!-- Start with light theme -->
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Production Quality Dashboard</title>
+
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet" integrity="sha384-T3c6CoIi6uLrA9TneNEoa7RxnatzjcDSCmG1MXxSR1GAsXEV/Dwwykc2MPK8M2HN" crossorigin="anonymous">
+    <!-- Bootstrap Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+
+    <!-- (Optional) Add CSS for libraries like noUiSlider or Select2 if you implement advanced filters -->
+    <!-- <link href="path/to/nouislider.min.css" rel="stylesheet"> -->
+    <!-- <link href="path/to/select2.min.css" rel="stylesheet"> -->
+    <!-- <link href="path/to/select2-bootstrap-5-theme.min.css" rel="stylesheet"> -->
+
+    <!-- Custom CSS -->
+    <!-- IMPORTANT: Adjust this path to your actual CSS file location -->
+    <link href="/static/css/style.css" rel="stylesheet">
+
+    <style>
+        /* Basic styling needed even if style.css is separate */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            min-height: 300px;
+            height: 40vh; /* Viewport height based */
+            max-height: 450px; /* Max height constraint */
+        }
+        .chart-container canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+        }
+        .kpi-card .card-body {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 1.25rem;
+        }
+        .kpi-card .kpi-value {
+            font-size: 2rem;
+            font-weight: 500;
+        }
+        .kpi-card .kpi-icon {
+            font-size: 2.5rem;
+            opacity: 0.7;
+        }
+        .card-hover:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 8px 15px rgba(0, 0, 0, 0.1) !important; /* Slightly stronger shadow on hover */
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        #filtersSection .card-body {
+            padding: 1.5rem; /* Ensure padding within filter card body */
+        }
+        .navbar {
+            box-shadow: 0 2px 4px rgba(0,0,0,.05); /* Subtle navbar shadow */
+        }
+        .card {
+           border: none; /* Remove default card borders for cleaner look with shadows */
+        }
+        .dashboard-section {
+            margin-bottom: 2.5rem; /* Consistent spacing between sections */
+        }
+        .section-title {
+            margin-bottom: 1.5rem;
+            font-weight: 500;
+            border-bottom: 1px solid var(--bs-border-color-translucent);
+            padding-bottom: 0.5rem;
+        }
+        #weekRangeValues {
+             font-weight: 500;
+             color: var(--bs-secondary-color); /* Style for week range text */
+        }
+        /* Style for filter slider (if using noUiSlider) */
+        #weekRangeSlider {
+            height: 10px; /* Example height */
+            margin-top: 1rem;
+            margin-bottom: 1rem;
+             /* Add more styles for .noUi-target, .noUi-connect, .noUi-handle etc. if needed */
+        }
+        /* Ensure no-data message is centered and doesn't interfere */
+        .no-data-message {
+             pointer-events: none; /* Allow clicks through to canvas */
+             /* Centering is handled by position-absolute/translate in JS */
+        }
+    </style>
+</head>
+<body class="bg-body-tertiary"> <!-- Slightly off-white background -->
+
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary sticky-top">
+        <div class="container-fluid px-md-4"> <!-- Wider container for navbar -->
+            <a class="navbar-brand fw-semibold" href="#">
+                <i class="bi bi-graph-up-arrow me-2"></i>Production Quality Dashboard
+            </a>
+            <div class="ms-auto d-flex align-items-center">
+                 <!-- Upload Form -->
+                 <form id="uploadFormNav" class="d-flex me-3" enctype="multipart/form-data">
+                    <!-- IMPORTANT: Ensure name="file" matches backend expectation if submitting to server -->
+                    <input class="form-control form-control-sm me-2" type="file" id="fileInputNav" name="file" accept=".csv,.xlsx,.xls" required title="Select CSV/Excel File">
+                    <button type="submit" class="btn btn-light btn-sm" title="Upload & Analyze"><i class="bi bi-cloud-upload fs-6"></i></button>
+                </form>
+                <!-- Theme Toggle -->
+                <button id="themeToggleBtn" class="btn btn-outline-light me-3" title="Toggle Theme">
+                    <i class="bi bi-moon-stars-fill"></i> <!-- Will be toggled by JS -->
+                </button>
+                <!-- Export Button Dropdown -->
+                 <div class="btn-group">
+                    <button type="button" class="btn btn-success dropdown-toggle btn-sm" data-bs-toggle="dropdown" aria-expanded="false" id="exportBtnContainer" style="display: none;">
+                        <i class="bi bi-download me-1"></i> Export
+                    </button>
+                    <ul class="dropdown-menu dropdown-menu-end">
+                        <li><button class="dropdown-item" type="button" id="downloadPdfBtn"><i class="bi bi-file-earmark-pdf-fill me-2 text-danger"></i>Export as PDF</button></li>
+                        <li><button class="dropdown-item" type="button" id="downloadExcelBtn"><i class="bi bi-file-earmark-excel-fill me-2 text-success"></i>Export as Excel (Data)</button></li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container-fluid mt-4 px-md-4"> <!-- Wider main content area -->
+        <div id="uploadStatus" class="mb-3 alert" role="alert" style="display: none;"></div> <!-- Status message area, initially hidden -->
+
+        <!-- Analysis Section (Initially Hidden) -->
+        <div id="analysisSection" style="display: none;">
+
+            <!-- Section 1: KPI Summary Cards -->
+            <section id="kpiSection" class="dashboard-section">
+                <h4 class="section-title">TAT Statistics</h4>
+                <div class="row row-cols-1 row-cols-sm-2 row-cols-lg-4 g-4"> <!-- Use g-4 for more gutter space -->
+                    <div class="col">
+                        <div class="card kpi-card h-100 shadow-sm card-hover"> <!-- Added shadow, hover effect, equal height -->
+                            <div class="card-body">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 text-muted text-uppercase small">Average TAT</h6>
+                                    <div class="kpi-value" id="tatAverage">N/A</div>
+                                </div>
+                                <i class="bi bi-speedometer2 kpi-icon text-primary"></i> <!-- Use theme colors -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col">
+                        <div class="card kpi-card h-100 shadow-sm card-hover">
+                            <div class="card-body">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 text-muted text-uppercase small">Median TAT</h6>
+                                    <div class="kpi-value" id="tatMedian">N/A</div>
+                                </div>
+                                <i class="bi bi-distribute-vertical kpi-icon text-info"></i>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col">
+                         <div class="card kpi-card h-100 shadow-sm card-hover">
+                            <div class="card-body">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 text-muted text-uppercase small">Min TAT</h6>
+                                    <div class="kpi-value" id="tatMin">N/A</div>
+                                </div>
+                                <i class="bi bi-chevron-double-down kpi-icon text-success"></i>
+                            </div>
+                        </div>
+                    </div>
+                     <div class="col">
+                         <div class="card kpi-card h-100 shadow-sm card-hover">
+                            <div class="card-body">
+                                <div>
+                                    <h6 class="card-subtitle mb-2 text-muted text-uppercase small">Max TAT</h6>
+                                    <div class="kpi-value" id="tatMax">N/A</div>
+                                </div>
+                                <i class="bi bi-chevron-double-up kpi-icon text-danger"></i>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+             <!-- Section 7: Interactive Filters -->
+            <section id="filtersSection" class="dashboard-section">
+                 <div class="card shadow-sm">
+                    <div class="card-header bg-body py-3 d-flex justify-content-between align-items-center">
+                        <h5 class="mb-0"><i class="bi bi-funnel me-2"></i>Filters</h5>
+                        <!-- Button triggers Bootstrap Collapse -->
+                        <button id="toggleFilters" class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#filterCollapseBody" aria-expanded="true" aria-controls="filterCollapseBody">
+                            <i class="bi bi-chevron-up me-1"></i>Hide Filters <!-- Initial state handled by JS -->
+                        </button>
+                    </div>
+                    <!-- Collapsible content -->
+                    <div class="collapse show" id="filterCollapseBody"> <!-- Start open -->
+                        <div class="card-body">
+                            <form id="filterForm">
+                                <div class="row g-3 align-items-end">
+                                    <div class="col-md col-lg-3">
+                                        <label for="productFamilyFilter" class="form-label small fw-semibold">Product Family</label>
+                                        <select class="form-select form-select-sm" id="productFamilyFilter">
+                                            <option value="">All Families</option>
+                                            <!-- Options populated by JS -->
+                                        </select>
+                                        <!-- Note: For multi-select, consider Select2/Choices.js and update JS accordingly -->
+                                    </div>
+                                    <div class="col-md col-lg-3">
+                                        <label for="assemblyFilter" class="form-label small fw-semibold">Assembly Number</label>
+                                        <select class="form-select form-select-sm" id="assemblyFilter">
+                                            <option value="">All Assemblies</option>
+                                            <!-- Options populated by JS -->
+                                        </select>
+                                         <!-- Note: For searchable select, consider Select2/Choices.js -->
+                                    </div>
+                                    <div class="col-md col-lg-4">
+                                        <label for="weekRangeSlider" class="form-label small fw-semibold">Week Range</label>
+                                        <div id="weekRangeSlider" class="mt-2 mb-1"></div> <!-- Placeholder for noUiSlider -->
+                                        <div id="weekRangeValues" class="form-text text-center mt-1 small">Weeks: 1 - 52</div> <!-- Default text -->
+                                         <!-- Note: Requires noUiSlider library and uncommented JS code -->
+                                    </div>
+                                    <div class="col-lg-2 mt-3 mt-lg-0 text-end align-self-end w-100"> <!-- Buttons stack nicely -->
+                                        <button type="button" id="resetFilters" class="btn btn-sm btn-outline-secondary me-2"><i class="bi bi-arrow-clockwise me-1"></i>Reset</button>
+                                        <button type="submit" class="btn btn-sm btn-primary"><i class="bi bi-check-lg me-1"></i>Apply</button>
+                                    </div>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 2: Weekly Trend and Product Breakdown -->
+            <section id="trendProductSection" class="dashboard-section">
+                <div class="row g-4">
+                    <div class="col-lg-7 col-xl-8"> <!-- Adjust grid for emphasis -->
+                        <div class="card h-100 shadow-sm card-hover">
+                            <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-graph-up me-2"></i>Weekly Defect Trend</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="weeklyTrendChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5 col-xl-4">
+                        <div class="card h-100 shadow-sm card-hover">
+                            <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-pie-chart-fill me-2"></i>Defects by Product Family</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="productFamilyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 3 & 4: Assembly & Detection -->
+             <section id="assemblyDetectionSection" class="dashboard-section">
+                 <div class="row g-4">
+                    <div class="col-lg-7 col-xl-8">
+                        <div class="card h-100 shadow-sm card-hover">
+                            <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-bar-chart-line-fill me-2"></i>Assembly Wise Defects (Top 5 Highlighted)</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="assemblyChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5 col-xl-4">
+                        <div class="card h-100 shadow-sm card-hover">
+                           <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-geo-alt-fill me-2"></i>Defects by Detection Stage</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="detectionStageChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Section 5 & 6 (Part 1): Problem Observed & Functionality -->
+             <section id="problemFunctionalitySection" class="dashboard-section">
+                 <div class="row g-4">
+                    <div class="col-lg-7 col-xl-8">
+                        <div class="card h-100 shadow-sm card-hover">
+                            <div class="card-header py-3 bg-body">
+                                <!-- **** THIS LINE IS CHANGED **** -->
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-list-ol me-2"></i>Problem Detection Stage</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="problemObservedChart"></canvas> <!-- Keep the ID unless you change it in JS too -->
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5 col-xl-4">
+                         <div class="card h-100 shadow-sm card-hover">
+                           <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-gear-wide-connected me-2"></i>Issue Functionality</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="functionalityChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+             <!-- Section 6 (Part 2) & Problem Analysis: Responsibility & Root Cause -->
+             <section id="responsibilityAnalysisSection" class="dashboard-section">
+                 <div class="row g-4">
+                     <div class="col-lg-5 col-xl-4">
+                        <div class="card h-100 shadow-sm card-hover">
+                           <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-people-fill me-2"></i>Responsible Parties</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="responsibleChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-7 col-xl-8">
+                        <div class="card h-100 shadow-sm card-hover">
+                           <div class="card-header py-3 bg-body">
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-search me-2"></i>Problem Analysis (Root Cause)</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="problemAnalysisChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- START: New Section for Submitted By -->
+            <section id="submittedBySection" class="dashboard-section">
+                <div class="row g-4">
+                    <div class="col-lg-12"> <!-- Make it full width -->
+                        <div class="card h-100 shadow-sm card-hover">
+                           <div class="card-header py-3 bg-body">
+                                <!-- Updated title -->
+                                <h6 class="mb-0 fw-semibold"><i class="bi bi-person-check-fill me-2"></i>Submissions by User</h6>
+                            </div>
+                            <div class="card-body chart-container">
+                                <canvas id="submittedByChart"></canvas> <!-- Unique ID for the new chart -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </section>
+            <!-- END: New Section for Submitted By -->
+
+        </div> <!-- End of analysisSection -->
+    </div> <!-- End of container -->
+
+    <footer class="py-4 mt-auto bg-light"> <!-- Use standard light background for footer -->
+         <div class="container-fluid px-md-4 text-center text-muted small">
+             © <span id="currentYear"></span> Production Quality Dashboard. All rights reserved.
+         </div>
+    </footer>
+
+    <!-- Core Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js" integrity="sha384-C6RzsynM9kWDrMNeT87bh95OGNyZPhcTNXj1NW7RuBCsyN/o0jlpcV8Qyq46cDfL" crossorigin="anonymous"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js" integrity="sha256-/JqT3SQfawRcv/BIHPThkBvs0OEvtFFmqPF/lYI/Cxo=" crossorigin="anonymous"></script>
+
+    <!-- Charting & Parsing Libraries -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js" integrity="sha512-dfX5uYVXzyU8+KHqj8bjo7UkOdg18PaOtpa48djpNbZHwExddghZ+ZmzWT06NUrfTtHHplLjwLLq41SQSeh9GQ==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+    <!-- IMPORTANT: Adjust this path to your actual SheetJS file location -->
+    <script src="/static/js/lib/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" integrity="sha512-qZvrmS2ekKPF2mSFdLMmvIs99AOpVsfLlHihVrylkboeVXzmARCj1+W6IlMhzzVEcgjAJErU3KkEZNOtZNyrxA==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
+
+    <!-- (Optional) Add JS for libraries like noUiSlider or Select2 -->
+    <!-- <script src="path/to/nouislider.min.js"></script> -->
+    <!-- <script src="path/to/select2.min.js"></script> -->
+
+    <!-- Custom JS -->
+    <!-- IMPORTANT: Adjust this path to your actual main JS file location -->
+    <script src="/static/js/main.js"></script>
+
+    <!-- Inline script for footer year and filter toggle button handler -->
+    <script>
+        // Simple script for footer year
+        document.getElementById('currentYear').textContent = new Date().getFullYear();
+
+        // Bootstrap Collapse Handler for Filter Button Text/Icon
+        const toggleFiltersBtn = document.getElementById('toggleFilters');
+        const filterCollapseBody = document.getElementById('filterCollapseBody'); // Target the collapsible element directly
+
+        if (toggleFiltersBtn && filterCollapseBody) {
+             // Listen for Bootstrap Collapse events
+             filterCollapseBody.addEventListener('show.bs.collapse', event => {
+                 toggleFiltersBtn.innerHTML = '<i class="bi bi-chevron-up me-1"></i>Hide Filters';
+             });
+             filterCollapseBody.addEventListener('hide.bs.collapse', event => {
+                 toggleFiltersBtn.innerHTML = '<i class="bi bi-chevron-down me-1"></i>Show Filters';
+             });
+
+             // Set initial state text/icon if starting collapsed (add 'show' class to #filterCollapseBody if starting open)
+             if (!filterCollapseBody.classList.contains('show')) {
+                  toggleFiltersBtn.innerHTML = '<i class="bi bi-chevron-down me-1"></i>Show Filters';
+             }
+        }
+
+        // Helper function for Status Alert (defined here or in main.js)
+        const uploadStatusAlert = document.getElementById('uploadStatus');
+        function showStatus(message, type = 'info') {
+            if (uploadStatusAlert) {
+                uploadStatusAlert.innerHTML = message; // Use innerHTML to allow small tags from JS
+                // Reset classes
+                uploadStatusAlert.className = 'mb-3 alert'; // Keep base classes
+                uploadStatusAlert.classList.add(`alert-${type}`);
+                uploadStatusAlert.style.display = 'block'; // Show the alert
+            } else {
+                console.log(`Status (${type}): ${message}`); // Fallback
+            }
+        }
+        // Optional: function hideStatus() { if (uploadStatusAlert) { uploadStatusAlert.style.display = 'none'; } }
+
+    </script>
+
+</body>
+</html>

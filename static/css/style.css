@@ -1,0 +1,80 @@
+/* Custom styles for Tabular Data Analyzer */
+
+/* Add some spacing to the page */
+body {
+    padding-bottom: 2rem;
+}
+
+/* Card styling */
+.card {
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1.5rem;
+}
+
+.card-header {
+    background-color: #f8f9fa;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.125);
+    font-weight: 500;
+}
+
+/* Chart container styling */
+[id$="Chart"] {
+    width: 100%;
+    height: 100%;
+    min-height: 300px;
+}
+
+/* Summary cards styling */
+.bg-light {
+    transition: all 0.3s ease;
+}
+
+.bg-light:hover {
+    background-color: #e9ecef !important;
+    transform: translateY(-3px);
+}
+
+/* Responsive table */
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* DataTables customization */
+.dataTables_wrapper .dataTables_length, 
+.dataTables_wrapper .dataTables_filter, 
+.dataTables_wrapper .dataTables_info, 
+.dataTables_wrapper .dataTables_processing, 
+.dataTables_wrapper .dataTables_paginate {
+    margin-bottom: 1rem;
+    color: #6c757d;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button.current {
+    background: #0d6efd;
+    color: white !important;
+    border-color: #0d6efd;
+}
+
+.dataTables_wrapper .dataTables_paginate .paginate_button:hover {
+    background: #0b5ed7;
+    color: white !important;
+    border-color: #0b5ed7;
+}
+
+/* Loading spinner */
+.spinner-border {
+    margin-right: 0.5rem;
+}
+
+/* Filter section toggle animation */
+#filtersSection {
+    transition: all 0.3s ease-in-out;
+}
+
+/* Make charts responsive */
+@media (max-width: 768px) {
+    [id$="Chart"] {
+        height: 300px !important;
+    }
+}
